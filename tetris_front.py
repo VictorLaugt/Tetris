@@ -68,14 +68,14 @@ class TetrisButtons(tk.Frame):
         )
         self.button_rotate_left = tk.Button(
             self,
-            text='↶(Ctrl + ←)',
+            text='↶ (^ ←)',
             font=self.font,
             width=10,
             command=self.master.rotate_left
         )
         self.button_rotate_right = tk.Button(
             self,
-            text='↷(Ctrl + →)',
+            text='↷ (^ →)',
             font=self.font,
             width=10,
             command=self.master.rotate_right
