@@ -4,17 +4,8 @@ import random
 from typing import TypeVar, Tuple
 
 Grid = TypeVar('2DArray')
-VectorArray = TypeVar('1DArray[2-Vector]')
+VectorGrid = TypeVar('2DArray[2-Vector]')
 Vector = TypeVar('2-Vector')
-
-
-def rotate_direct(vector):
-    """Rotates in place `vector` from pi/2"""
-    vector[0], vector[1] = vector[1], -vector[0]
-
-def rotate_indirect(vector):
-    """Rotates in place `vector` from -pi/2"""
-    vector[0], vector[1] = -vector[1], vector[0]
 
 
 class Direction:
@@ -22,6 +13,10 @@ class Direction:
     right = np.array([1, 0])
     up =    np.array([0, -1])
     down =  np.array([0, 1])
+    
+class Rotation:
+    direct = 1
+    indirect = -1
     
     
 def random_color():
@@ -34,37 +29,37 @@ class Block:
     Interface
     ----------------------------------------------------------------------------
     attributes:
-        squares: VectorArray
         color: int
     
     methods:
+        get_squares
         inside_limits
         colides
         shift
         rotate
         lock
     """
-    model: VectorArray
-    center: Vector
+    models: VectorGrid
     radius: int
     
-    def __init__(self, x, y, color):
-        self.position = np.zeros((2,), dtype=np.int64)
-        self.position[0] = x
-        self.position[1] = y
+    def __init__(self, x, y, color):        
+        self.shapes = self.models.copy()
+        self.shapes[:, :, 0] += x
+        self.shapes[:, :, 1] += y
         
-        self.squares = self.model.copy()
-        self.squares += self.position
-        
+        self.orientation = 0
         self.color = color
-    
+
+    def get_squares(self):
+        return self.shapes[self.orientation]
+
     def grid_repr(self, grid):
         result = []
         for y in range(grid.shape[1]):
             row = [f'{y:2}']
             for x in range(grid.shape[0]):
                 if (grid[x, y] or
-                        any((x,y) == (u,v) for u,v in self.squares)):
+                        any((x,y) == (u,v) for u,v in self.get_squares())):
                     row.append('*')
                 else:
                     row.append('.')
@@ -72,62 +67,94 @@ class Block:
         return '\n'.join(result)
     
     def inside_limits(self, width, height):
-        return (np.all((0,0) <= self.squares) and
-            np.all(self.squares < (width, height)))
+        sqrs = self.get_squares()
+        return np.all((0, 0) <= sqrs) and np.all(sqrs < (width, height))
     
     def colides(self, grid):
-        return any(grid[x, y] for x, y in self.squares)
+        return any(grid[x, y] for x, y in self.get_squares())
     
     def shift(self, vector):
-        self.squares += vector
-        self.position += vector
+        self.shapes += vector
     
-    def rotate(self, rotate_func):
-        position = self.position
-        for sqr in self.squares:
-            sqr -= position
-            rotate_func(sqr)
-            sqr += position
+    def rotate(self, rotation):
+        self.orientation = (self.orientation + rotation) % len(self.models)
     
     def lock(self, grid):
-        for x, y in self.squares:
+        for x, y in self.get_squares():
             grid[x, y] = self.color
 
 
-class BlockO(Block):
-    model = np.array([[0,0], [1,0], [0,1], [1,1]], dtype=np.int64)
-    center = np.array([0,0], dtype=np.int64)
-    radius = 2
+class BlockO(Block):    
+    models = np.array(( ((0,0), (1,0), (0,1), (1,1)), ), dtype=np.int64)
+    y_start = -2
+    x_min = 0
+    x_max = -1
 
 class BlockI(Block):
-    model = np.array([[0,-1], [0,0], [0,1], [0,2]], dtype=np.int64)
-    center = np.array([0,1], dtype=np.int64)
-    radius = 3
+    models = np.array((
+        ((0,-1), (0,0), (0,1), (0,2)),
+        ((-1,1), (0,1), (1,1), (2,1)),
+        ((1,-1), (1,0), (1,1), (1,2)),
+        ((-1,0), (0,0), (1,0), (2,0)),
+        ), dtype=np.int64)
+    y_start = -2
+    x_min = 1
+    x_max = -2
 
 class BlockS(Block):
-    model = np.array([[-1,0], [0,0], [0,-1], [1,-1]], dtype=np.int64)
-    center = np.array([1,0], dtype=np.int64)
-    radius = 2
+    models = np.array((
+        ((-1,0), (0,0), (0,-1), (1,-1)),
+        ((-1,-1), (-1,0), (0,0), (0,1)),
+        ((-1,1), (0,1), (0,0), (1,0)),
+        ((0,-1), (0,0), (1,0), (1,1)),
+        ), dtype=np.int64)
+    y_start = -2
+    x_min = 1
+    x_max = -1
 
 class BlockZ(Block):
-    model = np.array([[-1,-1], [0,-1], [0,0], [1,0]], dtype=np.int64)
-    center = np.array([1,0], dtype=np.int64)
-    radius = 2
-
-class BlockL(Block):
-    model = np.array([[-1,-1], [-1,0], [-1,1], [0,1]], dtype=np.int64)
-    center = np.array([0,1], dtype=np.int64)
-    radius = 2
+    models = np.array((
+        ((0,-1), (0,0), (-1,0), (-1,1)),
+        ((1,1), (0,1), (0,0), (-1,0)),
+        ((1,-1), (1,0), (0,0), (0,1)),
+        ((1,0), (0,0), (0,-1), (-1,-1)),
+        ), dtype=np.int64)
+    y_start = -2
+    x_min = 1
+    x_max = -1
 
 class BlockJ(Block):
-    model = np.array([[0,-1], [0,0], [0,1], [-1,1]], dtype=np.int64)
-    center = np.array([1,1], dtype=np.int64)
-    radius = 2
+    models = np.array((
+        ((0,1), (0,0), (0,-1), (-1,1)),
+        ((-1,0), (0,0), (1,0), (1,1)),
+        ((0,1), (0,0), (0,-1), (1,-1)),
+        ((-1,0), (0,0), (1,0), (-1,-1)),
+        ), dtype=np.int64)
+    y_start = -2
+    x_min = 1
+    x_max = -1
+
+class BlockL(Block):
+    models = np.array((
+        ((0,1), (0,0), (0,-1), (-1,-1)),
+        ((-1,0), (0,0), (1,0), (-1,1)),
+        ((0,1), (0,0), (0,-1), (1,1)),
+        ((-1,0), (0,0), (1,0), (1,-1)),
+        ), dtype=np.int64)
+    y_start = -2
+    x_min = 1
+    x_max = -1
 
 class BlockT(Block):
-    model = np.array([[-1,0], [0,0], [1,0], [0,1]], dtype=np.int64)
-    center = np.array([1,0], dtype=np.int64)
-    radius = 2
+    models = np.array((
+        ((0,1), (0,0), (0,-1), (1,0)),
+        ((-1,0), (0,0), (1,0), (0,-1)),
+        ((0,1), (0,0), (0,-1), (-1,0)),
+        ((-1,0), (0,0), (1,0), (0,1)),
+        ), dtype=np.int64)
+    y_start = -2
+    x_min = 1
+    x_max = -1
 
 SHAPES = (BlockO, BlockI, BlockS, BlockZ, BlockL ,BlockJ, BlockT)
 
@@ -175,7 +202,7 @@ class Tetris:
         
         # moving block
         color = self.current_block.color
-        for x, y in self.current_block.squares:
+        for x, y in self.current_block.get_squares():
             yield x, y, color
     
     def reset(self):
@@ -190,18 +217,17 @@ class Tetris:
         block_type = random.choice(SHAPES)
         block = block_type(
             random.randrange(
-                block_type.radius-1,
-                self.width-block_type.radius+1
+                block_type.x_min,
+                self.width + block_type.x_max
             ),
-            self.starting_row,
+            self.starting_row + block_type.y_start,
             random_color()
         )
         print(f'created {type(block).__name__}')
-        print(f'{block.position=}')
-        print(f'{block.squares=}')
+        print(f'{block.get_squares()=}')
         print(f'{block.color=}\n')
         for _ in range(random.randrange(0, 4)):
-            block.rotate(rotate_direct)
+            block.rotate(Rotation.direct)
         return block
     
     
@@ -257,11 +283,11 @@ class Tetris:
     )
     
     rotate_left = _move_methods_fallback(
-        lambda block: block.rotate(rotate_direct),
-        lambda block: block.rotate(rotate_indirect)
+        lambda block: block.rotate(Rotation.direct),
+        lambda block: block.rotate(Rotation.indirect)
     )
     
     rotate_right = _move_methods_fallback(
-        lambda block: block.rotate(rotate_indirect),
-        lambda block: block.rotate(rotate_direct)
+        lambda block: block.rotate(Rotation.indirect),
+        lambda block: block.rotate(Rotation.direct)
     )
