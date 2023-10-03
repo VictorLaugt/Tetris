@@ -29,6 +29,21 @@ def random_color():
 
 
 class Block:
+    """Implements Tetris blocks
+    
+    Interface
+    ----------------------------------------------------------------------------
+    attributes:
+        squares: VectorArray
+        color: int
+    
+    methods:
+        inside_limits
+        colides
+        shift
+        rotate
+        lock
+    """
     model: VectorArray
     center: Vector
     radius: int
@@ -121,7 +136,7 @@ class Tetris:
     """Implements a tetris game backend.
     
     Interface
-    -------------------------------
+    ----------------------------------------------------------------------------
     attributes:
         width: int
         height: int
