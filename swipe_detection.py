@@ -1,98 +1,125 @@
+from __future__ import annotations
+
+import abc
 import tkinter as tk
 
-TOUCH = 0
-SWIPE_UP = 1
-SWIPE_LEFT = 2
-SWIPE_RIGHT = 3
-SWIPE_DOWN = 4
-OTHER = 5
 
-
-class TouchGestureHandler(tk.Frame):
-    def __init__(self, *args, **kwargs):
+class AbstractSingleTouchHandler(tk.Frame, abc.ABC):
+    def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.start_x = None
         self.start_y = None
-        self.commands = [lambda: None] + [lambda _: None] * 5
-        self.sensitivity = 50
+        self.touch_max_length = 10
+        self.swipe_min_length = 50
+        self.bind('<ButtonPress-1>', self.on_touch_start)
+        self.bind('<ButtonRelease-1>', self.on_touch_end)
 
-        self.bind("<ButtonPress-1>", self.on_touch_start)
-        self.bind("<ButtonRelease-1>", self.on_touch_end)
+    def set_touch_max_length(self, touch_max_length: float) -> None:
+        self.touch_max_length = touch_max_length
 
-    def bind_touch_event(self, touch_event, function):
-        self.commands[touch_event] = function
-    
-    def set_sensitivity(self, new_sensitivity):
-        self.sensitivity = new_sensitivity
+    def get_touch_max_length(self):
+        return self.touch_max_length
 
-    def on_touch_start(self, event):
+    def set_swipe_min_length(self, swipe_min_length: float) -> None:
+        self.swipe_min_length = swipe_min_length
+
+    def get_swipe_min_length(self):
+        return self.swipe_min_length
+
+    def on_touch_start(self, event: tk.Event) -> None:
         self.start_x = event.x
         self.start_y = event.y
 
-    def on_touch_end(self, event):
+    def on_touch_end(self, event: tk.Event) -> None:
         dx = event.x - self.start_x
         dy = event.y - self.start_y
 
-        if abs(dx) < 10 and abs(dy) < 10:
-            self.commands[TOUCH]()
-        elif dy < -self.sensitivity:
-            self.commands[SWIPE_UP]((dx, dy))
-        elif dy > self.sensitivity:
-            self.commands[SWIPE_DOWN]((dx, dy))
-        elif dx > self.sensitivity:
-            self.commands[SWIPE_RIGHT]((dx, dy))
-        elif dx < -self.sensitivity:
-            self.commands[SWIPE_LEFT]((dx, dy))
+        if abs(dx) < self.touch_max_length and abs(dy) < self.touch_max_length:
+            self.on_touch(self.start_x, self.start_y, event.x, event.y, dx, dy)
+        elif dy < -self.swipe_min_length:
+            self.on_swipe_up(self.start_x, self.start_y, event.x, event.y, dx, dy)
+        elif dy > self.swipe_min_length:
+            self.on_swipe_down(self.start_x, self.start_y, event.x, event.y, dx, dy)
+        elif dx > self.swipe_min_length:
+            self.on_swipe_right(self.start_x, self.start_y, event.x, event.y, dx, dy)
+        elif dx < -self.swipe_min_length:
+            self.on_swipe_left(self.start_x, self.start_y, event.x, event.y, dx, dy)
         else:
-            self.commands[OTHER]((dx, dy))
-        
+            self.on_other(self.start_x, self.start_y, event.x, event.y, dx, dy)
 
-if __name__ == '__main__': #demo
-    class Foo(tk.Tk):
-        def __init__(self):
-            super().__init__()
-            self.text = tk.StringVar(self, '...')
-            self.label = tk.Label(textvariable=self.text)
-            
-            self.swipe_detector = TouchGestureHandler(self)
-            self.swipe_detector.bind_touch_event(TOUCH, self.touch)
-            self.swipe_detector.bind_touch_event(SWIPE_LEFT, self.left)
-            self.swipe_detector.bind_touch_event(SWIPE_RIGHT, self.right)
-            self.swipe_detector.bind_touch_event(SWIPE_DOWN, self.down)
-            self.swipe_detector.bind_touch_event(SWIPE_UP, self.up)
-            self.swipe_detector.bind_touch_event(OTHER, self.other)
-            self.swipe_detector.set_sensitivity(100)
-            
-            self.label.pack()
-            self.swipe_detector.pack(fill=tk.BOTH, expand=True)
-        
-        def touch(self):
-            self.text.set('touch')
-            self.after(3000, self.reset_text)
-        
-        def up(self, length):
-            self.text.set(f'up {length}')
-            self.after(3000, self.reset_text)
-        
-        def down(self, length):
-            self.text.set(f'down {length}')
-            self.after(3000, self.reset_text)
-        
-        def left(self, length):
-            self.text.set(f'left {length}')
-            self.after(3000, self.reset_text)
-        
-        def right(self, length):
-            self.text.set(f'right {length}')
-            self.after(3000, self.reset_text)
-        
-        def other(self, length):
-            self.text.set(f'other {length}')
-            self.after(3000, self.reset_text)
-        
-        def reset_text(self):
-            self.text.set('...')
+    @abc.abstractmethod
+    def on_touch(self, x0: float, y0: float, x1: float, y1: float, dx: float, dy: float) -> None:
+        pass
 
-    window = Foo()
+    @abc.abstractmethod
+    def on_swipe_up(self, x0: float, y0: float, x1: float, y1: float, dx: float, dy: float) -> None:
+        pass
+
+    @abc.abstractmethod
+    def on_swipe_down(self, x0: float, y0: float, x1: float, y1: float, dx: float, dy: float) -> None:
+        pass
+
+    @abc.abstractmethod
+    def on_swipe_left(self, x0: float, y0: float, x1: float, y1: float, dx: float, dy: float) -> None:
+        pass
+
+    @abc.abstractmethod
+    def on_swipe_right(self, x0: float, y0: float, x1: float, y1: float, dx: float, dy: float) -> None:
+        pass
+
+    @abc.abstractmethod
+    def on_other(self, x0: float, y0: float, x1: float, y1: float, dx: float, dy: float) -> None:
+        pass
+
+
+class DemoTouchGestureHandler(AbstractSingleTouchHandler):
+    def __init__(self, string_var: tk.StringVar) -> None:
+        super().__init__()
+        self.scheduling = None
+        self.string_var = string_var
+
+    def reset_text(self):
+        self.string_var.set('...')
+
+    def display_direction_name(self, direction_name: str, dx: float, dy: float) -> None:
+        length = (dx*dx + dy*dy) ** .5
+        self.string_var.set(f'{direction_name} (length = {length:.3f})')
+
+        if self.scheduling is not None:
+            self.after_cancel(self.scheduling)
+        self.scheduling = self.after(1500, self.reset_text)
+
+    def on_touch(self, x0: float, y0: float, x1: float, y1: float, dx: float, dy: float) -> None:
+        self.display_direction_name('touch', dx, dy)
+
+    def on_swipe_up(self, x0: float, y0: float, x1: float, y1: float, dx: float, dy: float) -> None:
+        self.display_direction_name('up', dx, dy)
+
+    def on_swipe_down(self, x0: float, y0: float, x1: float, y1: float, dx: float, dy: float) -> None:
+        self.display_direction_name('down', dx, dy)
+
+    def on_swipe_left(self, x0: float, y0: float, x1: float, y1: float, dx: float, dy: float) -> None:
+        self.display_direction_name('left', dx, dy)
+
+    def on_swipe_right(self, x0: float, y0: float, x1: float, y1: float, dx: float, dy: float) -> None:
+        self.display_direction_name('right', dx, dy)
+
+    def on_other(self, x0: float, y0: float, x1: float, y1: float, dx: float, dy: float) -> None:
+        self.display_direction_name('other', dx, dy)
+
+
+class DemoApp(tk.Tk):
+    def __init__(self) -> None:
+        super().__init__()
+        string_var = tk.StringVar(self, '...')
+        self.label = tk.Label(textvariable=string_var)
+        self.swipe_detector = DemoTouchGestureHandler(string_var)
+
+        self.label.pack()
+        self.swipe_detector.pack(fill=tk.BOTH, expand=True)
+
+
+if __name__ == '__main__':
+    window = DemoApp()
     window.mainloop()
 
